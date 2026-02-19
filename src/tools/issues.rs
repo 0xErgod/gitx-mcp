@@ -5,6 +5,7 @@ use serde::Deserialize;
 use crate::client::GiteaClient;
 use crate::error::Result;
 use crate::response;
+use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -83,8 +84,8 @@ pub struct IssueEditParams {
     pub assignees: Option<Vec<String>>,
 }
 
-pub async fn issue_list(client: &GiteaClient, params: IssueListParams) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+pub async fn issue_list(client: &GiteaClient, params: IssueListParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut query: Vec<(&str, String)> = Vec::new();
 
     let state = params.state.unwrap_or_else(|| "open".to_string());
@@ -110,8 +111,8 @@ pub async fn issue_list(client: &GiteaClient, params: IssueListParams) -> Result
     )]))
 }
 
-pub async fn issue_get(client: &GiteaClient, params: IssueGetParams) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+pub async fn issue_get(client: &GiteaClient, params: IssueGetParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let issue: serde_json::Value = client
         .get(&format!("/repos/{owner}/{repo}/issues/{}", params.index))
         .await?;
@@ -124,8 +125,9 @@ pub async fn issue_get(client: &GiteaClient, params: IssueGetParams) -> Result<C
 pub async fn issue_create(
     client: &GiteaClient,
     params: IssueCreateParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut body = serde_json::json!({ "title": params.title });
 
     if let Some(b) = &params.body {
@@ -153,8 +155,9 @@ pub async fn issue_create(
 pub async fn issue_edit(
     client: &GiteaClient,
     params: IssueEditParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut body = serde_json::json!({});
 
     if let Some(title) = &params.title {

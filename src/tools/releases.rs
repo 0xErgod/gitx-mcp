@@ -5,6 +5,7 @@ use serde::Deserialize;
 use crate::client::GiteaClient;
 use crate::error::Result;
 use crate::response;
+use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -58,8 +59,9 @@ pub struct ReleaseCreateParams {
 pub async fn release_list(
     client: &GiteaClient,
     params: ReleaseListParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut query: Vec<(&str, String)> = Vec::new();
     query.push(("page", params.page.unwrap_or(1).to_string()));
     query.push(("limit", params.limit.unwrap_or(20).min(50).to_string()));
@@ -113,8 +115,9 @@ pub async fn release_list(
 pub async fn release_get(
     client: &GiteaClient,
     params: ReleaseGetParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let release: serde_json::Value = client
         .get(&format!("/repos/{owner}/{repo}/releases/{}", params.id))
         .await?;
@@ -127,8 +130,9 @@ pub async fn release_get(
 pub async fn release_create(
     client: &GiteaClient,
     params: ReleaseCreateParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut body = serde_json::json!({ "tag_name": params.tag_name });
 
     if let Some(name) = &params.name {

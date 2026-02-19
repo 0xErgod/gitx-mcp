@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 use crate::client::GiteaClient;
 use crate::error::Result;
+use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -26,8 +27,8 @@ pub struct RepoSearchParams {
     pub limit: Option<i64>,
 }
 
-pub async fn repo_get(client: &GiteaClient, params: RepoGetParams) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+pub async fn repo_get(client: &GiteaClient, params: RepoGetParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let repo_info: serde_json::Value = client
         .get(&format!("/repos/{owner}/{repo}"))
         .await?;

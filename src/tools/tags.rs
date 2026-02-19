@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 use crate::client::GiteaClient;
 use crate::error::Result;
+use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -36,8 +37,8 @@ pub struct TagCreateParams {
     pub message: Option<String>,
 }
 
-pub async fn tag_list(client: &GiteaClient, params: TagListParams) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+pub async fn tag_list(client: &GiteaClient, params: TagListParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut query: Vec<(&str, String)> = Vec::new();
     query.push(("page", params.page.unwrap_or(1).to_string()));
     query.push(("limit", params.limit.unwrap_or(20).min(50).to_string()));
@@ -72,8 +73,8 @@ pub async fn tag_list(client: &GiteaClient, params: TagListParams) -> Result<Cal
     )]))
 }
 
-pub async fn tag_create(client: &GiteaClient, params: TagCreateParams) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+pub async fn tag_create(client: &GiteaClient, params: TagCreateParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut body = serde_json::json!({ "tag_name": params.tag_name });
 
     if let Some(target) = &params.target {

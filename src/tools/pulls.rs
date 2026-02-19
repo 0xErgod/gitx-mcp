@@ -5,6 +5,7 @@ use serde::Deserialize;
 use crate::client::GiteaClient;
 use crate::error::Result;
 use crate::response;
+use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -99,8 +100,8 @@ pub struct PrMergeParams {
     pub delete_branch_after_merge: Option<bool>,
 }
 
-pub async fn pr_list(client: &GiteaClient, params: PrListParams) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+pub async fn pr_list(client: &GiteaClient, params: PrListParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut query: Vec<(&str, String)> = Vec::new();
 
     let state = params.state.unwrap_or_else(|| "open".to_string());
@@ -118,8 +119,8 @@ pub async fn pr_list(client: &GiteaClient, params: PrListParams) -> Result<CallT
     )]))
 }
 
-pub async fn pr_get(client: &GiteaClient, params: PrGetParams) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+pub async fn pr_get(client: &GiteaClient, params: PrGetParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let pr: serde_json::Value = client
         .get(&format!("/repos/{owner}/{repo}/pulls/{}", params.index))
         .await?;
@@ -129,8 +130,8 @@ pub async fn pr_get(client: &GiteaClient, params: PrGetParams) -> Result<CallToo
     )]))
 }
 
-pub async fn pr_create(client: &GiteaClient, params: PrCreateParams) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+pub async fn pr_create(client: &GiteaClient, params: PrCreateParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut body = serde_json::json!({
         "title": params.title,
         "head": params.head,
@@ -159,8 +160,8 @@ pub async fn pr_create(client: &GiteaClient, params: PrCreateParams) -> Result<C
     )]))
 }
 
-pub async fn pr_edit(client: &GiteaClient, params: PrEditParams) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+pub async fn pr_edit(client: &GiteaClient, params: PrEditParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut body = serde_json::json!({});
 
     if let Some(title) = &params.title {
@@ -191,8 +192,8 @@ pub async fn pr_edit(client: &GiteaClient, params: PrEditParams) -> Result<CallT
     )]))
 }
 
-pub async fn pr_merge(client: &GiteaClient, params: PrMergeParams) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+pub async fn pr_merge(client: &GiteaClient, params: PrMergeParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut body = serde_json::json!({
         "Do": params.merge_style.unwrap_or_else(|| "merge".to_string()),
     });

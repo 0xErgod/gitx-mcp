@@ -5,6 +5,7 @@ use serde::Deserialize;
 use crate::client::GiteaClient;
 use crate::error::Result;
 use crate::response;
+use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -36,8 +37,9 @@ pub struct IssueCommentCreateParams {
 pub async fn issue_comment_list(
     client: &GiteaClient,
     params: IssueCommentListParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let comments: Vec<serde_json::Value> = client
         .get(&format!(
             "/repos/{owner}/{repo}/issues/{}/comments",
@@ -53,8 +55,9 @@ pub async fn issue_comment_list(
 pub async fn issue_comment_create(
     client: &GiteaClient,
     params: IssueCommentCreateParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let body = serde_json::json!({ "body": params.body });
     let comment: serde_json::Value = client
         .post(

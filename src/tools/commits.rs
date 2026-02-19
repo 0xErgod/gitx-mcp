@@ -5,6 +5,7 @@ use serde::Deserialize;
 use crate::client::GiteaClient;
 use crate::error::Result;
 use crate::response;
+use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -66,8 +67,9 @@ pub struct CommitCompareParams {
 pub async fn commit_list(
     client: &GiteaClient,
     params: CommitListParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut query: Vec<(&str, String)> = Vec::new();
 
     if let Some(sha) = &params.sha {
@@ -89,8 +91,8 @@ pub async fn commit_list(
     )]))
 }
 
-pub async fn commit_get(client: &GiteaClient, params: CommitGetParams) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+pub async fn commit_get(client: &GiteaClient, params: CommitGetParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let commit: serde_json::Value = client
         .get(&format!(
             "/repos/{owner}/{repo}/git/commits/{}",
@@ -106,8 +108,9 @@ pub async fn commit_get(client: &GiteaClient, params: CommitGetParams) -> Result
 pub async fn commit_diff(
     client: &GiteaClient,
     params: CommitDiffParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let diff = client
         .get_raw(&format!(
             "/repos/{owner}/{repo}/git/commits/{}.diff",
@@ -129,8 +132,9 @@ pub async fn commit_diff(
 pub async fn commit_compare(
     client: &GiteaClient,
     params: CommitCompareParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let result: serde_json::Value = client
         .get(&format!(
             "/repos/{owner}/{repo}/compare/{}...{}",

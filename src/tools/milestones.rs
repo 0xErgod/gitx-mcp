@@ -5,6 +5,7 @@ use serde::Deserialize;
 use crate::client::GiteaClient;
 use crate::error::Result;
 use crate::response;
+use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -50,8 +51,9 @@ pub struct MilestoneCreateParams {
 pub async fn milestone_list(
     client: &GiteaClient,
     params: MilestoneListParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let state = params.state.unwrap_or_else(|| "open".to_string());
     let query: Vec<(&str, &str)> = vec![("state", state.as_str())];
 
@@ -91,8 +93,9 @@ pub async fn milestone_list(
 pub async fn milestone_get(
     client: &GiteaClient,
     params: MilestoneGetParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let milestone: serde_json::Value = client
         .get(&format!(
             "/repos/{owner}/{repo}/milestones/{}",
@@ -108,8 +111,9 @@ pub async fn milestone_get(
 pub async fn milestone_create(
     client: &GiteaClient,
     params: MilestoneCreateParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut body = serde_json::json!({ "title": params.title });
 
     if let Some(desc) = &params.description {

@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 use crate::client::GiteaClient;
 use crate::error::Result;
+use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -37,8 +38,9 @@ pub struct PrReviewCreateParams {
 pub async fn pr_review_list(
     client: &GiteaClient,
     params: PrReviewListParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let reviews: Vec<serde_json::Value> = client
         .get(&format!(
             "/repos/{owner}/{repo}/pulls/{}/reviews",
@@ -85,8 +87,9 @@ pub async fn pr_review_list(
 pub async fn pr_review_create(
     client: &GiteaClient,
     params: PrReviewCreateParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut body = serde_json::json!({ "event": params.event });
 
     if let Some(b) = &params.body {

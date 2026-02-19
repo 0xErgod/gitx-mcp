@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 use crate::client::GiteaClient;
 use crate::error::Result;
+use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -30,8 +31,8 @@ pub struct PrDiffParams {
     pub index: i64,
 }
 
-pub async fn pr_files(client: &GiteaClient, params: PrFilesParams) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+pub async fn pr_files(client: &GiteaClient, params: PrFilesParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let files: Vec<serde_json::Value> = client
         .get(&format!(
             "/repos/{owner}/{repo}/pulls/{}/files",
@@ -67,8 +68,8 @@ pub async fn pr_files(client: &GiteaClient, params: PrFilesParams) -> Result<Cal
     )]))
 }
 
-pub async fn pr_diff(client: &GiteaClient, params: PrDiffParams) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+pub async fn pr_diff(client: &GiteaClient, params: PrDiffParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let diff = client
         .get_raw(&format!(
             "/repos/{owner}/{repo}/pulls/{}.diff",

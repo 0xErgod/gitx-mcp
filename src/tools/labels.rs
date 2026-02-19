@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 use crate::client::GiteaClient;
 use crate::error::Result;
+use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -50,8 +51,8 @@ pub struct LabelEditParams {
     pub description: Option<String>,
 }
 
-pub async fn label_list(client: &GiteaClient, params: LabelListParams) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+pub async fn label_list(client: &GiteaClient, params: LabelListParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let labels: Vec<serde_json::Value> = client
         .get(&format!("/repos/{owner}/{repo}/labels"))
         .await?;
@@ -88,8 +89,9 @@ pub async fn label_list(client: &GiteaClient, params: LabelListParams) -> Result
 pub async fn label_create(
     client: &GiteaClient,
     params: LabelCreateParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let color = if params.color.starts_with('#') {
         params.color.clone()
     } else {
@@ -122,8 +124,9 @@ pub async fn label_create(
 pub async fn label_edit(
     client: &GiteaClient,
     params: LabelEditParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut body = serde_json::json!({});
 
     if let Some(name) = &params.name {

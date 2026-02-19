@@ -5,6 +5,7 @@ use serde::Deserialize;
 use crate::client::GiteaClient;
 use crate::error::Result;
 use crate::response;
+use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -110,8 +111,8 @@ pub struct TreeGetParams {
     pub git_ref: Option<String>,
 }
 
-pub async fn file_read(client: &GiteaClient, params: FileReadParams) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+pub async fn file_read(client: &GiteaClient, params: FileReadParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let path = params.path.trim_start_matches('/');
     let mut url = format!("/repos/{owner}/{repo}/contents/{path}");
 
@@ -126,8 +127,8 @@ pub async fn file_read(client: &GiteaClient, params: FileReadParams) -> Result<C
     )]))
 }
 
-pub async fn file_list(client: &GiteaClient, params: FileListParams) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+pub async fn file_list(client: &GiteaClient, params: FileListParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let path = params
         .path
         .as_deref()
@@ -149,8 +150,9 @@ pub async fn file_list(client: &GiteaClient, params: FileListParams) -> Result<C
 pub async fn file_create(
     client: &GiteaClient,
     params: FileCreateParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let path = params.path.trim_start_matches('/');
 
     use base64::Engine;
@@ -186,8 +188,9 @@ pub async fn file_create(
 pub async fn file_update(
     client: &GiteaClient,
     params: FileUpdateParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let path = params.path.trim_start_matches('/');
 
     use base64::Engine;
@@ -218,8 +221,9 @@ pub async fn file_update(
 pub async fn file_delete(
     client: &GiteaClient,
     params: FileDeleteParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let path = params.path.trim_start_matches('/');
 
     let mut body = serde_json::json!({
@@ -240,8 +244,8 @@ pub async fn file_delete(
     ))]))
 }
 
-pub async fn tree_get(client: &GiteaClient, params: TreeGetParams) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+pub async fn tree_get(client: &GiteaClient, params: TreeGetParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let git_ref = params.git_ref.as_deref().unwrap_or("HEAD");
 
     let tree: serde_json::Value = client

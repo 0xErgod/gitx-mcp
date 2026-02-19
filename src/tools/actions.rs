@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 use crate::client::GiteaClient;
 use crate::error::Result;
+use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -57,8 +58,9 @@ pub struct ActionsJobLogsParams {
 pub async fn actions_workflow_list(
     client: &GiteaClient,
     params: ActionsWorkflowListParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
 
     // Gitea's Actions API: list workflow files by reading .gitea/workflows or .github/workflows
     // Try the action tasks endpoint instead
@@ -153,8 +155,9 @@ pub async fn actions_workflow_list(
 pub async fn actions_run_list(
     client: &GiteaClient,
     params: ActionsRunListParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut query: Vec<(&str, String)> = Vec::new();
     query.push(("page", params.page.unwrap_or(1).to_string()));
     query.push(("limit", params.limit.unwrap_or(20).min(50).to_string()));
@@ -218,8 +221,9 @@ pub async fn actions_run_list(
 pub async fn actions_run_get(
     client: &GiteaClient,
     params: ActionsRunGetParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let run: serde_json::Value = client
         .get(&format!(
             "/repos/{owner}/{repo}/actions/runs/{}",
@@ -284,8 +288,9 @@ pub async fn actions_run_get(
 pub async fn actions_job_logs(
     client: &GiteaClient,
     params: ActionsJobLogsParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let logs = client
         .get_raw(&format!(
             "/repos/{owner}/{repo}/actions/jobs/{}/logs",

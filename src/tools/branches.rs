@@ -5,6 +5,7 @@ use serde::Deserialize;
 use crate::client::GiteaClient;
 use crate::error::Result;
 use crate::response;
+use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -76,8 +77,9 @@ pub struct BranchProtectionCreateParams {
 pub async fn branch_list(
     client: &GiteaClient,
     params: BranchListParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut query: Vec<(&str, String)> = Vec::new();
     query.push(("page", params.page.unwrap_or(1).to_string()));
     query.push(("limit", params.limit.unwrap_or(20).min(50).to_string()));
@@ -103,8 +105,9 @@ pub async fn branch_list(
 pub async fn branch_create(
     client: &GiteaClient,
     params: BranchCreateParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut body = serde_json::json!({
         "new_branch_name": params.new_branch_name,
     });
@@ -130,8 +133,9 @@ pub async fn branch_create(
 pub async fn branch_delete(
     client: &GiteaClient,
     params: BranchDeleteParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     client
         .delete(&format!("/repos/{owner}/{repo}/branches/{}", params.branch))
         .await?;
@@ -145,8 +149,9 @@ pub async fn branch_delete(
 pub async fn branch_protection_list(
     client: &GiteaClient,
     params: BranchProtectionListParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let rules: Vec<serde_json::Value> = client
         .get(&format!("/repos/{owner}/{repo}/branch_protections"))
         .await?;
@@ -180,8 +185,9 @@ pub async fn branch_protection_list(
 pub async fn branch_protection_create(
     client: &GiteaClient,
     params: BranchProtectionCreateParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut body = serde_json::json!({
         "branch_name": params.branch_name,
     });

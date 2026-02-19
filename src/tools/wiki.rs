@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 use crate::client::GiteaClient;
 use crate::error::Result;
+use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -46,8 +47,8 @@ pub struct WikiCreateParams {
     pub content: String,
 }
 
-pub async fn wiki_list(client: &GiteaClient, params: WikiListParams) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+pub async fn wiki_list(client: &GiteaClient, params: WikiListParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut query: Vec<(&str, String)> = Vec::new();
     query.push(("page", params.page.unwrap_or(1).to_string()));
     query.push(("limit", params.limit.unwrap_or(20).min(50).to_string()));
@@ -86,8 +87,8 @@ pub async fn wiki_list(client: &GiteaClient, params: WikiListParams) -> Result<C
     )]))
 }
 
-pub async fn wiki_get(client: &GiteaClient, params: WikiGetParams) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+pub async fn wiki_get(client: &GiteaClient, params: WikiGetParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let page: serde_json::Value = client
         .get(&format!(
             "/repos/{owner}/{repo}/wiki/page/{}",
@@ -124,8 +125,9 @@ pub async fn wiki_get(client: &GiteaClient, params: WikiGetParams) -> Result<Cal
 pub async fn wiki_create(
     client: &GiteaClient,
     params: WikiCreateParams,
+    default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     use base64::Engine;
     let encoded = base64::engine::general_purpose::STANDARD.encode(params.content.as_bytes());
     let body = serde_json::json!({
