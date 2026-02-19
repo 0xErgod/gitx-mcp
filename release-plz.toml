@@ -1,0 +1,42 @@
+[workspace]
+# Binary-only, not published to crates.io
+publish = false
+# Use git tags for version detection (not crates.io registry)
+git_only = true
+# No semver-checks (binary, not a library)
+semver_check = false
+# Create local git tags (vX.Y.Z)
+git_tag_enable = true
+# No remote git releases (local workflow)
+git_release_enable = false
+# In 0.x development, features bump minor version
+features_always_increment_minor = true
+
+[changelog]
+header = """
+# Changelog
+
+All notable changes to this project will be documented in this file.
+"""
+body = """
+{% if version %}\
+    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+    ## [Unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | upper_first }}
+    {% for commit in commits %}
+        - {{ commit.message | upper_first }}\
+    {% endfor %}
+{% endfor %}\n
+"""
+commit_parsers = [
+    { message = "^feat", group = "Added" },
+    { message = "^fix", group = "Fixed" },
+    { message = "^doc", group = "Documentation" },
+    { message = "^refactor", group = "Changed" },
+    { message = "^perf", group = "Performance" },
+    { message = "^test", group = "Testing" },
+    { message = "^chore|^style|^ci|^build", group = "Maintenance" },
+]
