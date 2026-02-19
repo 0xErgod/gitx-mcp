@@ -24,9 +24,9 @@ pub struct ActionsRunListParams {
     pub repo: Option<String>,
     /// Local directory to auto-detect owner/repo from .git/config.
     pub directory: Option<String>,
-    /// Page number (1-based).
+    /// Page number (1-based). Defaults to 1.
     pub page: Option<i64>,
-    /// Items per page (max 50).
+    /// Items per page (max 50). Defaults to 20.
     pub limit: Option<i64>,
 }
 
@@ -50,7 +50,7 @@ pub struct ActionsJobLogsParams {
     pub repo: Option<String>,
     /// Local directory to auto-detect owner/repo from .git/config.
     pub directory: Option<String>,
-    /// Job ID.
+    /// Job ID (from the workflow run details in actions_run_get).
     pub job_id: i64,
 }
 

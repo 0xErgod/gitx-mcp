@@ -9,9 +9,9 @@ use crate::error::Result;
 pub struct NotificationListParams {
     /// Filter by status: unread, read, or all. Defaults to unread.
     pub status: Option<String>,
-    /// Page number (1-based).
+    /// Page number (1-based). Defaults to 1.
     pub page: Option<i64>,
-    /// Items per page (max 50).
+    /// Items per page (max 50). Defaults to 20.
     pub limit: Option<i64>,
 }
 

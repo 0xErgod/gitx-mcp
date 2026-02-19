@@ -40,7 +40,7 @@ pub struct LabelEditParams {
     pub repo: Option<String>,
     /// Local directory to auto-detect owner/repo from .git/config.
     pub directory: Option<String>,
-    /// Label ID.
+    /// Label ID (from label_list).
     pub id: i64,
     /// New label name.
     pub name: Option<String>,

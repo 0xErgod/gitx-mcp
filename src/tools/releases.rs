@@ -15,9 +15,9 @@ pub struct ReleaseListParams {
     pub repo: Option<String>,
     /// Local directory to auto-detect owner/repo from .git/config.
     pub directory: Option<String>,
-    /// Page number (1-based).
+    /// Page number (1-based). Defaults to 1.
     pub page: Option<i64>,
-    /// Items per page (max 50).
+    /// Items per page (max 50). Defaults to 20.
     pub limit: Option<i64>,
 }
 
@@ -29,7 +29,7 @@ pub struct ReleaseGetParams {
     pub repo: Option<String>,
     /// Local directory to auto-detect owner/repo from .git/config.
     pub directory: Option<String>,
-    /// Release ID.
+    /// Release ID (from release_list).
     pub id: i64,
 }
 

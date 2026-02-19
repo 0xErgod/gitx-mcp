@@ -21,9 +21,9 @@ pub struct IssueListParams {
     pub labels: Option<String>,
     /// Filter by milestone name.
     pub milestone: Option<String>,
-    /// Page number (1-based).
+    /// Page number (1-based). Defaults to 1.
     pub page: Option<i64>,
-    /// Items per page (max 50).
+    /// Items per page (max 50). Defaults to 20.
     pub limit: Option<i64>,
 }
 
@@ -51,9 +51,9 @@ pub struct IssueCreateParams {
     pub title: String,
     /// Issue body/description in markdown.
     pub body: Option<String>,
-    /// Label IDs to assign.
+    /// Label IDs to assign (from label_list).
     pub labels: Option<Vec<i64>>,
-    /// Milestone ID.
+    /// Milestone ID (from milestone_list).
     pub milestone: Option<i64>,
     /// Usernames to assign.
     pub assignees: Option<Vec<String>>,
@@ -75,9 +75,9 @@ pub struct IssueEditParams {
     pub body: Option<String>,
     /// New state: open or closed.
     pub state: Option<String>,
-    /// Label IDs to set (replaces existing).
+    /// Label IDs to set, replaces existing (from label_list).
     pub labels: Option<Vec<i64>>,
-    /// Milestone ID.
+    /// Milestone ID (from milestone_list).
     pub milestone: Option<i64>,
     /// Usernames to assign (replaces existing).
     pub assignees: Option<Vec<String>>,

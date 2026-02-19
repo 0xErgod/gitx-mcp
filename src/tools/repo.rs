@@ -20,9 +20,9 @@ pub struct RepoGetParams {
 pub struct RepoSearchParams {
     /// Search keyword.
     pub q: String,
-    /// Page number (1-based).
+    /// Page number (1-based). Defaults to 1.
     pub page: Option<i64>,
-    /// Items per page (max 50).
+    /// Items per page (max 50). Defaults to 20.
     pub limit: Option<i64>,
 }
 

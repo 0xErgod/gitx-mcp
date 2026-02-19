@@ -27,7 +27,7 @@ pub struct MilestoneGetParams {
     pub repo: Option<String>,
     /// Local directory to auto-detect owner/repo from .git/config.
     pub directory: Option<String>,
-    /// Milestone ID.
+    /// Milestone ID (from milestone_list).
     pub id: i64,
 }
 

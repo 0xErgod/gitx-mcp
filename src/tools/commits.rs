@@ -15,13 +15,13 @@ pub struct CommitListParams {
     pub repo: Option<String>,
     /// Local directory to auto-detect owner/repo from .git/config.
     pub directory: Option<String>,
-    /// Branch or tag to list commits from.
+    /// Branch name, tag name, or commit SHA to list commits from. Defaults to the default branch.
     pub sha: Option<String>,
     /// Filter commits by file path.
     pub path: Option<String>,
-    /// Page number (1-based).
+    /// Page number (1-based). Defaults to 1.
     pub page: Option<i64>,
-    /// Items per page (max 50).
+    /// Items per page (max 50). Defaults to 20.
     pub limit: Option<i64>,
 }
 

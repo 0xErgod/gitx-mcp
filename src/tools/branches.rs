@@ -15,9 +15,9 @@ pub struct BranchListParams {
     pub repo: Option<String>,
     /// Local directory to auto-detect owner/repo from .git/config.
     pub directory: Option<String>,
-    /// Page number (1-based).
+    /// Page number (1-based). Defaults to 1.
     pub page: Option<i64>,
-    /// Items per page (max 50).
+    /// Items per page (max 50). Defaults to 20.
     pub limit: Option<i64>,
 }
 
@@ -31,7 +31,7 @@ pub struct BranchCreateParams {
     pub directory: Option<String>,
     /// Name for the new branch.
     pub new_branch_name: String,
-    /// Source branch or commit SHA to branch from.
+    /// Source branch name or commit SHA to create the new branch from. Defaults to the default branch.
     pub old_branch_name: Option<String>,
 }
 
@@ -67,9 +67,9 @@ pub struct BranchProtectionCreateParams {
     pub directory: Option<String>,
     /// Branch name pattern to protect (e.g. "main", "release/*").
     pub branch_name: String,
-    /// Require pull request reviews before merging.
+    /// Allow direct pushes to this branch (bypassing pull requests).
     pub enable_push: Option<bool>,
-    /// Block force pushes to this branch.
+    /// Block merging when reviews have been rejected.
     pub block_on_rejected_reviews: Option<bool>,
 }
 
