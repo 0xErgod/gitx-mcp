@@ -1,0 +1,88 @@
+use rmcp::model::{CallToolResult, Content};
+use schemars::JsonSchema;
+use serde::Deserialize;
+
+use crate::client::GiteaClient;
+use crate::error::Result;
+use crate::server::resolve_owner_repo;
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct PrFilesParams {
+    /// Repository owner. Optional if `directory` is provided.
+    pub owner: Option<String>,
+    /// Repository name. Optional if `directory` is provided.
+    pub repo: Option<String>,
+    /// Local directory to auto-detect owner/repo from .git/config.
+    pub directory: Option<String>,
+    /// Pull request number.
+    pub index: i64,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct PrDiffParams {
+    /// Repository owner. Optional if `directory` is provided.
+    pub owner: Option<String>,
+    /// Repository name. Optional if `directory` is provided.
+    pub repo: Option<String>,
+    /// Local directory to auto-detect owner/repo from .git/config.
+    pub directory: Option<String>,
+    /// Pull request number.
+    pub index: i64,
+}
+
+pub async fn pr_files(client: &GiteaClient, params: PrFilesParams) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let files: Vec<serde_json::Value> = client
+        .get(&format!(
+            "/repos/{owner}/{repo}/pulls/{}/files",
+            params.index
+        ))
+        .await?;
+
+    if files.is_empty() {
+        return Ok(CallToolResult::success(vec![Content::text(
+            "No changed files.",
+        )]));
+    }
+
+    let formatted: Vec<String> = files
+        .iter()
+        .map(|f| {
+            let filename = f
+                .get("filename")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            let status = f
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("modified");
+            let additions = f.get("additions").and_then(|v| v.as_i64()).unwrap_or(0);
+            let deletions = f.get("deletions").and_then(|v| v.as_i64()).unwrap_or(0);
+            format!("- {filename} ({status}) +{additions} -{deletions}")
+        })
+        .collect();
+
+    Ok(CallToolResult::success(vec![Content::text(
+        formatted.join("\n"),
+    )]))
+}
+
+pub async fn pr_diff(client: &GiteaClient, params: PrDiffParams) -> Result<CallToolResult> {
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory)?;
+    let diff = client
+        .get_raw(&format!(
+            "/repos/{owner}/{repo}/pulls/{}.diff",
+            params.index
+        ))
+        .await?;
+
+    if diff.is_empty() {
+        return Ok(CallToolResult::success(vec![Content::text(
+            "No diff content.",
+        )]));
+    }
+
+    Ok(CallToolResult::success(vec![Content::text(format!(
+        "```diff\n{diff}\n```"
+    ))]))
+}

@@ -1,0 +1,26 @@
+[package]
+name = "gitx-mcp"
+version = "0.1.0"
+edition = "2021"
+description = "MCP server for Gitea/Forgejo with full API coverage optimized for AI agents"
+license = "MIT"
+
+[dependencies]
+rmcp = { version = "0.16", features = ["server", "transport-io", "macros"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+schemars = "1"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = "2"
+dotenvy = "0.15"
+base64 = "0.22"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
