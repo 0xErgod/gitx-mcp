@@ -1,0 +1,49 @@
+name: Bug Report
+about: Report a bug with a tool or the server
+labels:
+  - bug
+body:
+  - type: input
+    id: tool
+    attributes:
+      label: Tool name
+      description: Which tool is affected?
+      placeholder: e.g. file_update, pr_merge
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the bug. Include the parameters you passed and the error or unexpected result.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: input
+    id: gitea-version
+    attributes:
+      label: Gitea/Forgejo version
+      placeholder: e.g. Gitea 1.22.0, Forgejo 9.0
+    validations:
+      required: false
+  - type: input
+    id: gitx-version
+    attributes:
+      label: gitx-mcp version
+      placeholder: e.g. 0.1.0
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste any error output or logs (set RUST_LOG=debug for verbose output).
+      render: shell
+    validations:
+      required: false

@@ -1,0 +1,26 @@
+name: Feature Request
+description: Suggest a new tool or improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What tool or feature would you like to see?
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: Describe the workflow or scenario where this would be useful.
+    validations:
+      required: true
+  - type: input
+    id: api-endpoint
+    attributes:
+      label: Gitea API endpoint
+      description: If this maps to a specific Gitea API endpoint, link it here.
+      placeholder: e.g. GET /repos/{owner}/{repo}/topics
+    validations:
+      required: false
