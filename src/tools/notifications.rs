@@ -2,7 +2,7 @@ use rmcp::model::{CallToolResult, Content};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::client::GiteaClient;
+use crate::client::GitClient;
 use crate::error::Result;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -22,22 +22,42 @@ pub struct NotificationMarkReadParams {
 }
 
 pub async fn notification_list(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: NotificationListParams,
 ) -> Result<CallToolResult> {
+    use crate::platform::Platform;
+
     let mut query: Vec<(&str, String)> = Vec::new();
 
     if let Some(status) = &params.status {
-        // Gitea API uses status-types parameter
-        query.push(("status-types", status.clone()));
+        match client.platform() {
+            Platform::Gitea => {
+                // Gitea API uses status-types parameter
+                query.push(("status-types", status.clone()));
+            }
+            Platform::GitHub => {
+                // GitHub uses all=true to show all, or participating=true
+                match status.as_str() {
+                    "all" => query.push(("all", "true".to_string())),
+                    "read" => query.push(("all", "true".to_string())),
+                    "participating" => query.push(("participating", "true".to_string())),
+                    _ => {} // "unread" is the default on GitHub
+                }
+            }
+        }
     }
     query.push(("page", params.page.unwrap_or(1).to_string()));
-    query.push(("limit", params.limit.unwrap_or(20).min(50).to_string()));
+    if client.platform() == Platform::Gitea {
+        query.push(("limit", params.limit.unwrap_or(20).min(50).to_string()));
+    } else {
+        query.push(("per_page", params.limit.unwrap_or(20).min(50).to_string()));
+    }
 
     let query_refs: Vec<(&str, &str)> = query.iter().map(|(k, v)| (*k, v.as_str())).collect();
-    let notifications: Vec<serde_json::Value> = client
-        .get_with_query("/notifications", &query_refs)
+    let val = client
+        .get_json_with_query("/notifications", &query_refs)
         .await?;
+    let notifications = val.as_array().cloned().unwrap_or_default();
 
     if notifications.is_empty() {
         return Ok(CallToolResult::success(vec![Content::text(
@@ -76,12 +96,12 @@ pub async fn notification_list(
 }
 
 pub async fn notification_mark_read(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: NotificationMarkReadParams,
 ) -> Result<CallToolResult> {
     if let Some(id) = params.id {
-        client
-            .patch::<serde_json::Value>(
+        let _ = client
+            .patch_json(
                 &format!("/notifications/threads/{id}"),
                 &serde_json::json!({}),
             )
@@ -90,8 +110,8 @@ pub async fn notification_mark_read(
             "Notification #{id} marked as read."
         ))]))
     } else {
-        client
-            .put::<serde_json::Value>("/notifications", &serde_json::json!({}))
+        let _ = client
+            .put_json("/notifications", &serde_json::json!({}))
             .await?;
         Ok(CallToolResult::success(vec![Content::text(
             "All notifications marked as read.",

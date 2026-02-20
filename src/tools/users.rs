@@ -2,7 +2,7 @@ use rmcp::model::{CallToolResult, Content};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::client::GiteaClient;
+use crate::client::GitClient;
 use crate::error::Result;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -14,8 +14,8 @@ pub struct UserGetParams {
     pub username: String,
 }
 
-pub async fn user_get_me(client: &GiteaClient) -> Result<CallToolResult> {
-    let user: serde_json::Value = client.get("/user").await?;
+pub async fn user_get_me(client: &dyn GitClient) -> Result<CallToolResult> {
+    let user = client.get_json("/user").await?;
 
     let mut parts = Vec::new();
     let login = user
@@ -49,9 +49,9 @@ pub async fn user_get_me(client: &GiteaClient) -> Result<CallToolResult> {
     )]))
 }
 
-pub async fn user_get(client: &GiteaClient, params: UserGetParams) -> Result<CallToolResult> {
-    let user: serde_json::Value = client
-        .get(&format!("/users/{}", params.username))
+pub async fn user_get(client: &dyn GitClient, params: UserGetParams) -> Result<CallToolResult> {
+    let user = client
+        .get_json(&format!("/users/{}", params.username))
         .await?;
 
     let mut parts = Vec::new();

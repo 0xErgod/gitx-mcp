@@ -2,7 +2,7 @@ use rmcp::model::{CallToolResult, Content};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::client::GiteaClient;
+use crate::client::GitClient;
 use crate::error::Result;
 use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
@@ -51,11 +51,12 @@ pub struct LabelEditParams {
     pub description: Option<String>,
 }
 
-pub async fn label_list(client: &GiteaClient, params: LabelListParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+pub async fn label_list(client: &dyn GitClient, params: LabelListParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
-    let labels: Vec<serde_json::Value> = client
-        .get(&format!("/repos/{owner}/{repo}/labels"))
+    let val = client
+        .get_json(&format!("/repos/{owner}/{repo}/labels"))
         .await?;
+    let labels = val.as_array().cloned().unwrap_or_default();
 
     if labels.is_empty() {
         return Ok(CallToolResult::success(vec![Content::text(
@@ -87,7 +88,7 @@ pub async fn label_list(client: &GiteaClient, params: LabelListParams, default_r
 }
 
 pub async fn label_create(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: LabelCreateParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
@@ -107,8 +108,8 @@ pub async fn label_create(
         body["description"] = serde_json::Value::String(desc.clone());
     }
 
-    let label: serde_json::Value = client
-        .post(&format!("/repos/{owner}/{repo}/labels"), &body)
+    let label = client
+        .post_json(&format!("/repos/{owner}/{repo}/labels"), &body)
         .await?;
 
     let name = label
@@ -122,7 +123,7 @@ pub async fn label_create(
 }
 
 pub async fn label_edit(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: LabelEditParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
@@ -144,8 +145,8 @@ pub async fn label_edit(
         body["description"] = serde_json::Value::String(desc.clone());
     }
 
-    let label: serde_json::Value = client
-        .patch(
+    let label = client
+        .patch_json(
             &format!("/repos/{owner}/{repo}/labels/{}", params.id),
             &body,
         )

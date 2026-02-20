@@ -2,7 +2,7 @@ use rmcp::model::{CallToolResult, Content};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::client::GiteaClient;
+use crate::client::GitClient;
 use crate::error::Result;
 use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
@@ -31,14 +31,15 @@ pub struct PrDiffParams {
     pub index: i64,
 }
 
-pub async fn pr_files(client: &GiteaClient, params: PrFilesParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+pub async fn pr_files(client: &dyn GitClient, params: PrFilesParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
-    let files: Vec<serde_json::Value> = client
-        .get(&format!(
+    let val = client
+        .get_json(&format!(
             "/repos/{owner}/{repo}/pulls/{}/files",
             params.index
         ))
         .await?;
+    let files = val.as_array().cloned().unwrap_or_default();
 
     if files.is_empty() {
         return Ok(CallToolResult::success(vec![Content::text(
@@ -68,7 +69,7 @@ pub async fn pr_files(client: &GiteaClient, params: PrFilesParams, default_repo:
     )]))
 }
 
-pub async fn pr_diff(client: &GiteaClient, params: PrDiffParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+pub async fn pr_diff(client: &dyn GitClient, params: PrDiffParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let diff = client
         .get_raw(&format!(

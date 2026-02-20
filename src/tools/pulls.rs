@@ -2,7 +2,7 @@ use rmcp::model::{CallToolResult, Content};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::client::GiteaClient;
+use crate::client::GitClient;
 use crate::error::Result;
 use crate::response;
 use crate::repo_resolver::RepoInfo;
@@ -100,7 +100,7 @@ pub struct PrMergeParams {
     pub delete_branch_after_merge: Option<bool>,
 }
 
-pub async fn pr_list(client: &GiteaClient, params: PrListParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+pub async fn pr_list(client: &dyn GitClient, params: PrListParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut query: Vec<(&str, String)> = Vec::new();
 
@@ -110,19 +110,20 @@ pub async fn pr_list(client: &GiteaClient, params: PrListParams, default_repo: O
     query.push(("limit", params.limit.unwrap_or(20).min(50).to_string()));
 
     let query_refs: Vec<(&str, &str)> = query.iter().map(|(k, v)| (*k, v.as_str())).collect();
-    let prs: Vec<serde_json::Value> = client
-        .get_with_query(&format!("/repos/{owner}/{repo}/pulls"), &query_refs)
+    let val = client
+        .get_json_with_query(&format!("/repos/{owner}/{repo}/pulls"), &query_refs)
         .await?;
+    let prs = val.as_array().cloned().unwrap_or_default();
 
     Ok(CallToolResult::success(vec![Content::text(
         response::format_pr_list(&prs),
     )]))
 }
 
-pub async fn pr_get(client: &GiteaClient, params: PrGetParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+pub async fn pr_get(client: &dyn GitClient, params: PrGetParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
-    let pr: serde_json::Value = client
-        .get(&format!("/repos/{owner}/{repo}/pulls/{}", params.index))
+    let pr = client
+        .get_json(&format!("/repos/{owner}/{repo}/pulls/{}", params.index))
         .await?;
 
     Ok(CallToolResult::success(vec![Content::text(
@@ -130,7 +131,7 @@ pub async fn pr_get(client: &GiteaClient, params: PrGetParams, default_repo: Opt
     )]))
 }
 
-pub async fn pr_create(client: &GiteaClient, params: PrCreateParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+pub async fn pr_create(client: &dyn GitClient, params: PrCreateParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut body = serde_json::json!({
         "title": params.title,
@@ -151,8 +152,8 @@ pub async fn pr_create(client: &GiteaClient, params: PrCreateParams, default_rep
         body["assignees"] = serde_json::json!(assignees);
     }
 
-    let pr: serde_json::Value = client
-        .post(&format!("/repos/{owner}/{repo}/pulls"), &body)
+    let pr = client
+        .post_json(&format!("/repos/{owner}/{repo}/pulls"), &body)
         .await?;
 
     Ok(CallToolResult::success(vec![Content::text(
@@ -160,7 +161,7 @@ pub async fn pr_create(client: &GiteaClient, params: PrCreateParams, default_rep
     )]))
 }
 
-pub async fn pr_edit(client: &GiteaClient, params: PrEditParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+pub async fn pr_edit(client: &dyn GitClient, params: PrEditParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut body = serde_json::json!({});
 
@@ -180,8 +181,8 @@ pub async fn pr_edit(client: &GiteaClient, params: PrEditParams, default_repo: O
         body["assignees"] = serde_json::json!(assignees);
     }
 
-    let pr: serde_json::Value = client
-        .patch(
+    let pr = client
+        .patch_json(
             &format!("/repos/{owner}/{repo}/pulls/{}", params.index),
             &body,
         )
@@ -192,15 +193,29 @@ pub async fn pr_edit(client: &GiteaClient, params: PrEditParams, default_repo: O
     )]))
 }
 
-pub async fn pr_merge(client: &GiteaClient, params: PrMergeParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
-    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
-    let mut body = serde_json::json!({
-        "Do": params.merge_style.unwrap_or_else(|| "merge".to_string()),
-    });
+pub async fn pr_merge(client: &dyn GitClient, params: PrMergeParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    use crate::platform::Platform;
 
-    if let Some(msg) = &params.merge_message {
-        body["merge_message_field"] = serde_json::Value::String(msg.clone());
-    }
+    let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
+    let style = params.merge_style.unwrap_or_else(|| "merge".to_string());
+
+    let mut body = match client.platform() {
+        Platform::Gitea => {
+            let mut b = serde_json::json!({ "Do": style });
+            if let Some(msg) = &params.merge_message {
+                b["merge_message_field"] = serde_json::Value::String(msg.clone());
+            }
+            b
+        }
+        Platform::GitHub => {
+            let mut b = serde_json::json!({ "merge_method": style });
+            if let Some(msg) = &params.merge_message {
+                b["commit_message"] = serde_json::Value::String(msg.clone());
+            }
+            b
+        }
+    };
+
     if let Some(delete) = params.delete_branch_after_merge {
         body["delete_branch_after_merge"] = serde_json::Value::Bool(delete);
     }

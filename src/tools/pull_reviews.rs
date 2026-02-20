@@ -2,7 +2,7 @@ use rmcp::model::{CallToolResult, Content};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::client::GiteaClient;
+use crate::client::GitClient;
 use crate::error::Result;
 use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
@@ -36,17 +36,18 @@ pub struct PrReviewCreateParams {
 }
 
 pub async fn pr_review_list(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: PrReviewListParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
-    let reviews: Vec<serde_json::Value> = client
-        .get(&format!(
+    let val = client
+        .get_json(&format!(
             "/repos/{owner}/{repo}/pulls/{}/reviews",
             params.index
         ))
         .await?;
+    let reviews = val.as_array().cloned().unwrap_or_default();
 
     if reviews.is_empty() {
         return Ok(CallToolResult::success(vec![Content::text(
@@ -85,7 +86,7 @@ pub async fn pr_review_list(
 }
 
 pub async fn pr_review_create(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: PrReviewCreateParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
@@ -96,8 +97,8 @@ pub async fn pr_review_create(
         body["body"] = serde_json::Value::String(b.clone());
     }
 
-    let review: serde_json::Value = client
-        .post(
+    let review = client
+        .post_json(
             &format!("/repos/{owner}/{repo}/pulls/{}/reviews", params.index),
             &body,
         )

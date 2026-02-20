@@ -2,7 +2,7 @@ use rmcp::model::{CallToolResult, Content};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::client::GiteaClient;
+use crate::client::GitClient;
 use crate::error::Result;
 use crate::response;
 use crate::repo_resolver::RepoInfo;
@@ -111,7 +111,7 @@ pub struct TreeGetParams {
     pub git_ref: Option<String>,
 }
 
-pub async fn file_read(client: &GiteaClient, params: FileReadParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+pub async fn file_read(client: &dyn GitClient, params: FileReadParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let path = params.path.trim_start_matches('/');
     let mut url = format!("/repos/{owner}/{repo}/contents/{path}");
@@ -120,14 +120,14 @@ pub async fn file_read(client: &GiteaClient, params: FileReadParams, default_rep
         url = format!("{url}?ref={git_ref}");
     }
 
-    let file: serde_json::Value = client.get(&url).await?;
+    let file = client.get_json(&url).await?;
 
     Ok(CallToolResult::success(vec![Content::text(
         response::format_file_content(&file),
     )]))
 }
 
-pub async fn file_list(client: &GiteaClient, params: FileListParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+pub async fn file_list(client: &dyn GitClient, params: FileListParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let path = params
         .path
@@ -140,7 +140,8 @@ pub async fn file_list(client: &GiteaClient, params: FileListParams, default_rep
         url = format!("{url}?ref={git_ref}");
     }
 
-    let entries: Vec<serde_json::Value> = client.get(&url).await?;
+    let val = client.get_json(&url).await?;
+    let entries = val.as_array().cloned().unwrap_or_default();
 
     Ok(CallToolResult::success(vec![Content::text(
         response::format_file_list(&entries),
@@ -148,7 +149,7 @@ pub async fn file_list(client: &GiteaClient, params: FileListParams, default_rep
 }
 
 pub async fn file_create(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: FileCreateParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
@@ -170,8 +171,8 @@ pub async fn file_create(
         body["new_branch"] = serde_json::Value::String(new_branch.clone());
     }
 
-    let result: serde_json::Value = client
-        .post(&format!("/repos/{owner}/{repo}/contents/{path}"), &body)
+    let result = client
+        .post_json(&format!("/repos/{owner}/{repo}/contents/{path}"), &body)
         .await?;
 
     let file_path = result
@@ -186,7 +187,7 @@ pub async fn file_create(
 }
 
 pub async fn file_update(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: FileUpdateParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
@@ -209,8 +210,8 @@ pub async fn file_update(
         body["new_branch"] = serde_json::Value::String(new_branch.clone());
     }
 
-    let _result: serde_json::Value = client
-        .put(&format!("/repos/{owner}/{repo}/contents/{path}"), &body)
+    let _result = client
+        .put_json(&format!("/repos/{owner}/{repo}/contents/{path}"), &body)
         .await?;
 
     Ok(CallToolResult::success(vec![Content::text(format!(
@@ -219,7 +220,7 @@ pub async fn file_update(
 }
 
 pub async fn file_delete(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: FileDeleteParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
@@ -244,12 +245,12 @@ pub async fn file_delete(
     ))]))
 }
 
-pub async fn tree_get(client: &GiteaClient, params: TreeGetParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+pub async fn tree_get(client: &dyn GitClient, params: TreeGetParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let git_ref = params.git_ref.as_deref().unwrap_or("HEAD");
 
-    let tree: serde_json::Value = client
-        .get(&format!(
+    let tree = client
+        .get_json(&format!(
             "/repos/{owner}/{repo}/git/trees/{git_ref}?recursive=true"
         ))
         .await?;

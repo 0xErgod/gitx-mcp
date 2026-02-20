@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::error::{GiteaError, Result};
+use crate::error::{GitxError, Result};
 
 /// Owner and repository name pair extracted from a git remote.
 #[derive(Debug, Clone)]
@@ -18,13 +18,13 @@ pub fn resolve_repo(directory: &str) -> Result<RepoInfo> {
     let git_config_path = Path::new(directory).join(".git").join("config");
 
     if !git_config_path.exists() {
-        return Err(GiteaError::RepoResolution(format!(
+        return Err(GitxError::RepoResolution(format!(
             "No .git/config found in {directory}"
         )));
     }
 
     let content = std::fs::read_to_string(&git_config_path).map_err(|e| {
-        GiteaError::RepoResolution(format!("Failed to read .git/config: {e}"))
+        GitxError::RepoResolution(format!("Failed to read .git/config: {e}"))
     })?;
 
     // Simple parser: find [remote "origin"] section, then url = ...
@@ -45,7 +45,7 @@ pub fn resolve_repo(directory: &str) -> Result<RepoInfo> {
         }
     }
 
-    Err(GiteaError::RepoResolution(
+    Err(GitxError::RepoResolution(
         "No remote 'origin' URL found in .git/config".to_string(),
     ))
 }
@@ -87,7 +87,7 @@ fn extract_owner_repo(path: &str) -> Result<RepoInfo> {
     let parts: Vec<&str> = path.splitn(3, '/').collect();
 
     if parts.len() < 2 {
-        return Err(GiteaError::RepoResolution(format!(
+        return Err(GitxError::RepoResolution(format!(
             "Cannot extract owner/repo from path: {path}"
         )));
     }

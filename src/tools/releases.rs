@@ -2,7 +2,7 @@ use rmcp::model::{CallToolResult, Content};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::client::GiteaClient;
+use crate::client::GitClient;
 use crate::error::Result;
 use crate::response;
 use crate::repo_resolver::RepoInfo;
@@ -57,7 +57,7 @@ pub struct ReleaseCreateParams {
 }
 
 pub async fn release_list(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: ReleaseListParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
@@ -67,9 +67,10 @@ pub async fn release_list(
     query.push(("limit", params.limit.unwrap_or(20).min(50).to_string()));
 
     let query_refs: Vec<(&str, &str)> = query.iter().map(|(k, v)| (*k, v.as_str())).collect();
-    let releases: Vec<serde_json::Value> = client
-        .get_with_query(&format!("/repos/{owner}/{repo}/releases"), &query_refs)
+    let val = client
+        .get_json_with_query(&format!("/repos/{owner}/{repo}/releases"), &query_refs)
         .await?;
+    let releases = val.as_array().cloned().unwrap_or_default();
 
     if releases.is_empty() {
         return Ok(CallToolResult::success(vec![Content::text(
@@ -113,13 +114,13 @@ pub async fn release_list(
 }
 
 pub async fn release_get(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: ReleaseGetParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
-    let release: serde_json::Value = client
-        .get(&format!("/repos/{owner}/{repo}/releases/{}", params.id))
+    let release = client
+        .get_json(&format!("/repos/{owner}/{repo}/releases/{}", params.id))
         .await?;
 
     Ok(CallToolResult::success(vec![Content::text(
@@ -128,7 +129,7 @@ pub async fn release_get(
 }
 
 pub async fn release_create(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: ReleaseCreateParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
@@ -151,8 +152,8 @@ pub async fn release_create(
         body["target_commitish"] = serde_json::Value::String(target.clone());
     }
 
-    let release: serde_json::Value = client
-        .post(&format!("/repos/{owner}/{repo}/releases"), &body)
+    let release = client
+        .post_json(&format!("/repos/{owner}/{repo}/releases"), &body)
         .await?;
 
     let tag = release
