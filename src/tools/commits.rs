@@ -2,7 +2,7 @@ use rmcp::model::{CallToolResult, Content};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::client::GiteaClient;
+use crate::client::GitClient;
 use crate::error::Result;
 use crate::response;
 use crate::repo_resolver::RepoInfo;
@@ -65,7 +65,7 @@ pub struct CommitCompareParams {
 }
 
 pub async fn commit_list(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: CommitListParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
@@ -82,19 +82,20 @@ pub async fn commit_list(
     query.push(("limit", params.limit.unwrap_or(20).min(50).to_string()));
 
     let query_refs: Vec<(&str, &str)> = query.iter().map(|(k, v)| (*k, v.as_str())).collect();
-    let commits: Vec<serde_json::Value> = client
-        .get_with_query(&format!("/repos/{owner}/{repo}/commits"), &query_refs)
+    let val = client
+        .get_json_with_query(&format!("/repos/{owner}/{repo}/commits"), &query_refs)
         .await?;
+    let commits = val.as_array().cloned().unwrap_or_default();
 
     Ok(CallToolResult::success(vec![Content::text(
         response::format_commit_list(&commits),
     )]))
 }
 
-pub async fn commit_get(client: &GiteaClient, params: CommitGetParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+pub async fn commit_get(client: &dyn GitClient, params: CommitGetParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
-    let commit: serde_json::Value = client
-        .get(&format!(
+    let commit = client
+        .get_json(&format!(
             "/repos/{owner}/{repo}/git/commits/{}",
             params.sha
         ))
@@ -106,7 +107,7 @@ pub async fn commit_get(client: &GiteaClient, params: CommitGetParams, default_r
 }
 
 pub async fn commit_diff(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: CommitDiffParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
@@ -130,13 +131,13 @@ pub async fn commit_diff(
 }
 
 pub async fn commit_compare(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: CommitCompareParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
-    let result: serde_json::Value = client
-        .get(&format!(
+    let result = client
+        .get_json(&format!(
             "/repos/{owner}/{repo}/compare/{}...{}",
             params.base, params.head
         ))

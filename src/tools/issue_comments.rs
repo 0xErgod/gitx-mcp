@@ -2,7 +2,7 @@ use rmcp::model::{CallToolResult, Content};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::client::GiteaClient;
+use crate::client::GitClient;
 use crate::error::Result;
 use crate::response;
 use crate::repo_resolver::RepoInfo;
@@ -35,17 +35,18 @@ pub struct IssueCommentCreateParams {
 }
 
 pub async fn issue_comment_list(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: IssueCommentListParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
-    let comments: Vec<serde_json::Value> = client
-        .get(&format!(
+    let val = client
+        .get_json(&format!(
             "/repos/{owner}/{repo}/issues/{}/comments",
             params.index
         ))
         .await?;
+    let comments = val.as_array().cloned().unwrap_or_default();
 
     Ok(CallToolResult::success(vec![Content::text(
         response::format_comment_list(&comments),
@@ -53,14 +54,14 @@ pub async fn issue_comment_list(
 }
 
 pub async fn issue_comment_create(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: IssueCommentCreateParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let body = serde_json::json!({ "body": params.body });
-    let comment: serde_json::Value = client
-        .post(
+    let comment = client
+        .post_json(
             &format!("/repos/{owner}/{repo}/issues/{}/comments", params.index),
             &body,
         )

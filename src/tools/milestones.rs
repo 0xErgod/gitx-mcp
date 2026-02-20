@@ -2,7 +2,7 @@ use rmcp::model::{CallToolResult, Content};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::client::GiteaClient;
+use crate::client::GitClient;
 use crate::error::Result;
 use crate::response;
 use crate::repo_resolver::RepoInfo;
@@ -49,7 +49,7 @@ pub struct MilestoneCreateParams {
 }
 
 pub async fn milestone_list(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: MilestoneListParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
@@ -57,9 +57,10 @@ pub async fn milestone_list(
     let state = params.state.unwrap_or_else(|| "open".to_string());
     let query: Vec<(&str, &str)> = vec![("state", state.as_str())];
 
-    let milestones: Vec<serde_json::Value> = client
-        .get_with_query(&format!("/repos/{owner}/{repo}/milestones"), &query)
+    let val = client
+        .get_json_with_query(&format!("/repos/{owner}/{repo}/milestones"), &query)
         .await?;
+    let milestones = val.as_array().cloned().unwrap_or_default();
 
     if milestones.is_empty() {
         return Ok(CallToolResult::success(vec![Content::text(
@@ -91,13 +92,13 @@ pub async fn milestone_list(
 }
 
 pub async fn milestone_get(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: MilestoneGetParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
-    let milestone: serde_json::Value = client
-        .get(&format!(
+    let milestone = client
+        .get_json(&format!(
             "/repos/{owner}/{repo}/milestones/{}",
             params.id
         ))
@@ -109,7 +110,7 @@ pub async fn milestone_get(
 }
 
 pub async fn milestone_create(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: MilestoneCreateParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
@@ -123,8 +124,8 @@ pub async fn milestone_create(
         body["due_on"] = serde_json::Value::String(due.clone());
     }
 
-    let milestone: serde_json::Value = client
-        .post(&format!("/repos/{owner}/{repo}/milestones"), &body)
+    let milestone = client
+        .post_json(&format!("/repos/{owner}/{repo}/milestones"), &body)
         .await?;
 
     let title = milestone

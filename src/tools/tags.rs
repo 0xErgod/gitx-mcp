@@ -2,7 +2,7 @@ use rmcp::model::{CallToolResult, Content};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::client::GiteaClient;
+use crate::client::GitClient;
 use crate::error::Result;
 use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
@@ -37,16 +37,17 @@ pub struct TagCreateParams {
     pub message: Option<String>,
 }
 
-pub async fn tag_list(client: &GiteaClient, params: TagListParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+pub async fn tag_list(client: &dyn GitClient, params: TagListParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut query: Vec<(&str, String)> = Vec::new();
     query.push(("page", params.page.unwrap_or(1).to_string()));
     query.push(("limit", params.limit.unwrap_or(20).min(50).to_string()));
 
     let query_refs: Vec<(&str, &str)> = query.iter().map(|(k, v)| (*k, v.as_str())).collect();
-    let tags: Vec<serde_json::Value> = client
-        .get_with_query(&format!("/repos/{owner}/{repo}/tags"), &query_refs)
+    let val = client
+        .get_json_with_query(&format!("/repos/{owner}/{repo}/tags"), &query_refs)
         .await?;
+    let tags = val.as_array().cloned().unwrap_or_default();
 
     if tags.is_empty() {
         return Ok(CallToolResult::success(vec![Content::text(
@@ -73,7 +74,7 @@ pub async fn tag_list(client: &GiteaClient, params: TagListParams, default_repo:
     )]))
 }
 
-pub async fn tag_create(client: &GiteaClient, params: TagCreateParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+pub async fn tag_create(client: &dyn GitClient, params: TagCreateParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut body = serde_json::json!({ "tag_name": params.tag_name });
 
@@ -84,8 +85,8 @@ pub async fn tag_create(client: &GiteaClient, params: TagCreateParams, default_r
         body["message"] = serde_json::Value::String(msg.clone());
     }
 
-    let tag: serde_json::Value = client
-        .post(&format!("/repos/{owner}/{repo}/tags"), &body)
+    let tag = client
+        .post_json(&format!("/repos/{owner}/{repo}/tags"), &body)
         .await?;
 
     let name = tag

@@ -2,7 +2,7 @@ use rmcp::model::{CallToolResult, Content};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::client::GiteaClient;
+use crate::client::GitClient;
 use crate::error::Result;
 use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
@@ -56,104 +56,147 @@ pub struct ActionsJobLogsParams {
 }
 
 pub async fn actions_workflow_list(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: ActionsWorkflowListParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
+    use crate::platform::Platform;
+
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
 
-    // Gitea's Actions API: list workflow files by reading .gitea/workflows or .github/workflows
-    // Try the action tasks endpoint instead
-    let result: serde_json::Value = client
-        .get(&format!("/repos/{owner}/{repo}/actions/tasks"))
-        .await
-        .unwrap_or(serde_json::json!({"workflow_runs": []}));
+    match client.platform() {
+        Platform::GitHub => {
+            // GitHub has a native workflows API
+            let result = client
+                .get_json(&format!("/repos/{owner}/{repo}/actions/workflows"))
+                .await?;
 
-    let workflows = result
-        .get("workflow_runs")
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
+            let workflows = result
+                .get("workflows")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
 
-    if workflows.is_empty() {
-        // Fallback: list files in .gitea/workflows directory
-        let files: std::result::Result<Vec<serde_json::Value>, _> = client
-            .get(&format!(
-                "/repos/{owner}/{repo}/contents/.gitea/workflows"
-            ))
-            .await;
-
-        match files {
-            Ok(entries) if !entries.is_empty() => {
-                let formatted: Vec<String> = entries
-                    .iter()
-                    .map(|e| {
-                        let name =
-                            e.get("name").and_then(|v| v.as_str()).unwrap_or("?");
-                        format!("- {name}")
-                    })
-                    .collect();
-                return Ok(CallToolResult::success(vec![Content::text(format!(
-                    "Workflow files:\n{}",
-                    formatted.join("\n")
-                ))]));
+            if workflows.is_empty() {
+                return Ok(CallToolResult::success(vec![Content::text(
+                    "No workflows found.",
+                )]));
             }
-            _ => {
+
+            let formatted: Vec<String> = workflows
+                .iter()
+                .map(|w| {
+                    let name = w.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+                    let state = w.get("state").and_then(|v| v.as_str()).unwrap_or("unknown");
+                    let path = w.get("path").and_then(|v| v.as_str()).unwrap_or("");
+                    format!("- {name} ({state}) [{path}]")
+                })
+                .collect();
+
+            Ok(CallToolResult::success(vec![Content::text(
+                formatted.join("\n"),
+            )]))
+        }
+        Platform::Gitea => {
+            // Gitea: try action tasks endpoint, then fall back to listing workflow files
+            let result = client
+                .get_json(&format!("/repos/{owner}/{repo}/actions/tasks"))
+                .await
+                .unwrap_or(serde_json::json!({"workflow_runs": []}));
+
+            let workflows = result
+                .get("workflow_runs")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+
+            if workflows.is_empty() {
+                // Fallback: list files in .gitea/workflows directory
+                let files_val: std::result::Result<serde_json::Value, _> = client
+                    .get_json(&format!(
+                        "/repos/{owner}/{repo}/contents/.gitea/workflows"
+                    ))
+                    .await;
+
+                match files_val {
+                    Ok(val) => {
+                        let entries = val.as_array().cloned().unwrap_or_default();
+                        if !entries.is_empty() {
+                            let formatted: Vec<String> = entries
+                                .iter()
+                                .map(|e| {
+                                    let name =
+                                        e.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+                                    format!("- {name}")
+                                })
+                                .collect();
+                            return Ok(CallToolResult::success(vec![Content::text(format!(
+                                "Workflow files:\n{}",
+                                formatted.join("\n")
+                            ))]));
+                        }
+                    }
+                    Err(_) => {}
+                }
+
                 // Try .github/workflows
-                let files2: std::result::Result<Vec<serde_json::Value>, _> = client
-                    .get(&format!(
+                let files2_val: std::result::Result<serde_json::Value, _> = client
+                    .get_json(&format!(
                         "/repos/{owner}/{repo}/contents/.github/workflows"
                     ))
                     .await;
 
-                match files2 {
-                    Ok(entries) if !entries.is_empty() => {
-                        let formatted: Vec<String> = entries
-                            .iter()
-                            .map(|e| {
-                                let name = e
-                                    .get("name")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("?");
-                                format!("- {name}")
-                            })
-                            .collect();
-                        return Ok(CallToolResult::success(vec![Content::text(
-                            format!(
-                                "Workflow files:\n{}",
-                                formatted.join("\n")
-                            ),
-                        )]));
+                match files2_val {
+                    Ok(val) => {
+                        let entries = val.as_array().cloned().unwrap_or_default();
+                        if !entries.is_empty() {
+                            let formatted: Vec<String> = entries
+                                .iter()
+                                .map(|e| {
+                                    let name = e
+                                        .get("name")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("?");
+                                    format!("- {name}")
+                                })
+                                .collect();
+                            return Ok(CallToolResult::success(vec![Content::text(
+                                format!(
+                                    "Workflow files:\n{}",
+                                    formatted.join("\n")
+                                ),
+                            )]));
+                        }
                     }
-                    _ => {
-                        return Ok(CallToolResult::success(vec![Content::text(
-                            "No workflows found.",
-                        )]));
-                    }
+                    Err(_) => {}
                 }
+
+                return Ok(CallToolResult::success(vec![Content::text(
+                    "No workflows found.",
+                )]));
             }
+
+            let formatted: Vec<String> = workflows
+                .iter()
+                .map(|w| {
+                    let name = w.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+                    let status = w
+                        .get("status")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown");
+                    format!("- {name} ({status})")
+                })
+                .collect();
+
+            Ok(CallToolResult::success(vec![Content::text(
+                formatted.join("\n"),
+            )]))
         }
     }
-
-    let formatted: Vec<String> = workflows
-        .iter()
-        .map(|w| {
-            let name = w.get("name").and_then(|v| v.as_str()).unwrap_or("?");
-            let status = w
-                .get("status")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
-            format!("- {name} ({status})")
-        })
-        .collect();
-
-    Ok(CallToolResult::success(vec![Content::text(
-        formatted.join("\n"),
-    )]))
 }
 
 pub async fn actions_run_list(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: ActionsRunListParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
@@ -163,8 +206,8 @@ pub async fn actions_run_list(
     query.push(("limit", params.limit.unwrap_or(20).min(50).to_string()));
 
     let query_refs: Vec<(&str, &str)> = query.iter().map(|(k, v)| (*k, v.as_str())).collect();
-    let result: serde_json::Value = client
-        .get_with_query(
+    let result = client
+        .get_json_with_query(
             &format!("/repos/{owner}/{repo}/actions/runs"),
             &query_refs,
         )
@@ -219,13 +262,13 @@ pub async fn actions_run_list(
 }
 
 pub async fn actions_run_get(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: ActionsRunGetParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
-    let run: serde_json::Value = client
-        .get(&format!(
+    let run = client
+        .get_json(&format!(
             "/repos/{owner}/{repo}/actions/runs/{}",
             params.run_id
         ))
@@ -286,7 +329,7 @@ pub async fn actions_run_get(
 }
 
 pub async fn actions_job_logs(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: ActionsJobLogsParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {

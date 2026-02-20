@@ -381,7 +381,7 @@ pub fn format_branch(branch: &Value) -> String {
         .unwrap_or(false);
     let sha = branch
         .get("commit")
-        .and_then(|v| v.get("id"))
+        .and_then(|v| v.get("id").or_else(|| v.get("sha")))
         .and_then(|v| v.as_str())
         .map(|s| &s[..7.min(s.len())])
         .unwrap_or("???????");

@@ -2,7 +2,7 @@ use rmcp::model::{CallToolResult, Content};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::client::GiteaClient;
+use crate::client::GitClient;
 use crate::error::Result;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -20,8 +20,9 @@ pub struct OrgTeamsParams {
     pub org: String,
 }
 
-pub async fn org_list(client: &GiteaClient) -> Result<CallToolResult> {
-    let orgs: Vec<serde_json::Value> = client.get("/user/orgs").await?;
+pub async fn org_list(client: &dyn GitClient) -> Result<CallToolResult> {
+    let val = client.get_json("/user/orgs").await?;
+    let orgs = val.as_array().cloned().unwrap_or_default();
 
     if orgs.is_empty() {
         return Ok(CallToolResult::success(vec![Content::text(
@@ -50,8 +51,8 @@ pub async fn org_list(client: &GiteaClient) -> Result<CallToolResult> {
     )]))
 }
 
-pub async fn org_get(client: &GiteaClient, params: OrgGetParams) -> Result<CallToolResult> {
-    let org: serde_json::Value = client.get(&format!("/orgs/{}", params.org)).await?;
+pub async fn org_get(client: &dyn GitClient, params: OrgGetParams) -> Result<CallToolResult> {
+    let org = client.get_json(&format!("/orgs/{}", params.org)).await?;
 
     let mut parts = Vec::new();
     let name = org.get("name").and_then(|v| v.as_str()).unwrap_or("?");
@@ -86,10 +87,11 @@ pub async fn org_get(client: &GiteaClient, params: OrgGetParams) -> Result<CallT
     )]))
 }
 
-pub async fn org_teams(client: &GiteaClient, params: OrgTeamsParams) -> Result<CallToolResult> {
-    let teams: Vec<serde_json::Value> = client
-        .get(&format!("/orgs/{}/teams", params.org))
+pub async fn org_teams(client: &dyn GitClient, params: OrgTeamsParams) -> Result<CallToolResult> {
+    let val = client
+        .get_json(&format!("/orgs/{}/teams", params.org))
         .await?;
+    let teams = val.as_array().cloned().unwrap_or_default();
 
     if teams.is_empty() {
         return Ok(CallToolResult::success(vec![Content::text(

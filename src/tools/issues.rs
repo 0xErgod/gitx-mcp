@@ -2,7 +2,7 @@ use rmcp::model::{CallToolResult, Content};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::client::GiteaClient;
+use crate::client::GitClient;
 use crate::error::Result;
 use crate::response;
 use crate::repo_resolver::RepoInfo;
@@ -84,13 +84,19 @@ pub struct IssueEditParams {
     pub assignees: Option<Vec<String>>,
 }
 
-pub async fn issue_list(client: &GiteaClient, params: IssueListParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+pub async fn issue_list(client: &dyn GitClient, params: IssueListParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    use crate::platform::Platform;
+
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut query: Vec<(&str, String)> = Vec::new();
 
     let state = params.state.unwrap_or_else(|| "open".to_string());
     query.push(("state", state));
-    query.push(("type", "issues".to_string()));
+
+    // Gitea needs type=issues to exclude PRs; GitHub doesn't need this
+    if client.platform() == Platform::Gitea {
+        query.push(("type", "issues".to_string()));
+    }
 
     if let Some(labels) = &params.labels {
         query.push(("labels", labels.clone()));
@@ -102,19 +108,27 @@ pub async fn issue_list(client: &GiteaClient, params: IssueListParams, default_r
     query.push(("limit", params.limit.unwrap_or(20).min(50).to_string()));
 
     let query_refs: Vec<(&str, &str)> = query.iter().map(|(k, v)| (*k, v.as_str())).collect();
-    let issues: Vec<serde_json::Value> = client
-        .get_with_query(&format!("/repos/{owner}/{repo}/issues"), &query_refs)
+    let val = client
+        .get_json_with_query(&format!("/repos/{owner}/{repo}/issues"), &query_refs)
         .await?;
+    let all_items = val.as_array().cloned().unwrap_or_default();
+
+    // On GitHub, filter out pull requests (they have a "pull_request" key)
+    let issues: Vec<serde_json::Value> = if client.platform() == Platform::GitHub {
+        all_items.into_iter().filter(|i| i.get("pull_request").is_none()).collect()
+    } else {
+        all_items
+    };
 
     Ok(CallToolResult::success(vec![Content::text(
         response::format_issue_list(&issues),
     )]))
 }
 
-pub async fn issue_get(client: &GiteaClient, params: IssueGetParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+pub async fn issue_get(client: &dyn GitClient, params: IssueGetParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
-    let issue: serde_json::Value = client
-        .get(&format!("/repos/{owner}/{repo}/issues/{}", params.index))
+    let issue = client
+        .get_json(&format!("/repos/{owner}/{repo}/issues/{}", params.index))
         .await?;
 
     Ok(CallToolResult::success(vec![Content::text(
@@ -123,7 +137,7 @@ pub async fn issue_get(client: &GiteaClient, params: IssueGetParams, default_rep
 }
 
 pub async fn issue_create(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: IssueCreateParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
@@ -143,8 +157,8 @@ pub async fn issue_create(
         body["assignees"] = serde_json::json!(assignees);
     }
 
-    let issue: serde_json::Value = client
-        .post(&format!("/repos/{owner}/{repo}/issues"), &body)
+    let issue = client
+        .post_json(&format!("/repos/{owner}/{repo}/issues"), &body)
         .await?;
 
     Ok(CallToolResult::success(vec![Content::text(
@@ -153,7 +167,7 @@ pub async fn issue_create(
 }
 
 pub async fn issue_edit(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: IssueEditParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
@@ -179,8 +193,8 @@ pub async fn issue_edit(
         body["assignees"] = serde_json::json!(assignees);
     }
 
-    let issue: serde_json::Value = client
-        .patch(
+    let issue = client
+        .patch_json(
             &format!("/repos/{owner}/{repo}/issues/{}", params.index),
             &body,
         )

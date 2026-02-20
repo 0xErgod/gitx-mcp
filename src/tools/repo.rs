@@ -2,7 +2,7 @@ use rmcp::model::{CallToolResult, Content};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::client::GiteaClient;
+use crate::client::GitClient;
 use crate::error::Result;
 use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
@@ -27,10 +27,10 @@ pub struct RepoSearchParams {
     pub limit: Option<i64>,
 }
 
-pub async fn repo_get(client: &GiteaClient, params: RepoGetParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+pub async fn repo_get(client: &dyn GitClient, params: RepoGetParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
-    let repo_info: serde_json::Value = client
-        .get(&format!("/repos/{owner}/{repo}"))
+    let repo_info = client
+        .get_json(&format!("/repos/{owner}/{repo}"))
         .await?;
 
     let mut parts = Vec::new();
@@ -56,10 +56,12 @@ pub async fn repo_get(client: &GiteaClient, params: RepoGetParams, default_repo:
 
     let stars = repo_info
         .get("stars_count")
+        .or_else(|| repo_info.get("stargazers_count"))
         .and_then(|v| v.as_i64())
         .unwrap_or(0);
     let forks = repo_info
         .get("forks_count")
+        .or_else(|| repo_info.get("forks"))
         .and_then(|v| v.as_i64())
         .unwrap_or(0);
     parts.push(format!("**Stars:** {stars} | **Forks:** {forks}"));
@@ -85,21 +87,33 @@ pub async fn repo_get(client: &GiteaClient, params: RepoGetParams, default_repo:
 }
 
 pub async fn repo_search(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: RepoSearchParams,
 ) -> Result<CallToolResult> {
+    use crate::platform::Platform;
+
     let mut query: Vec<(&str, String)> = Vec::new();
     query.push(("q", params.q.clone()));
     query.push(("page", params.page.unwrap_or(1).to_string()));
-    query.push(("limit", params.limit.unwrap_or(20).min(50).to_string()));
+
+    let (path, wrapper_key, stars_key) = match client.platform() {
+        Platform::Gitea => {
+            query.push(("limit", params.limit.unwrap_or(20).min(50).to_string()));
+            ("/repos/search", "data", "stars_count")
+        }
+        Platform::GitHub => {
+            query.push(("per_page", params.limit.unwrap_or(20).min(50).to_string()));
+            ("/search/repositories", "items", "stargazers_count")
+        }
+    };
 
     let query_refs: Vec<(&str, &str)> = query.iter().map(|(k, v)| (*k, v.as_str())).collect();
-    let result: serde_json::Value = client
-        .get_with_query("/repos/search", &query_refs)
+    let result = client
+        .get_json_with_query(path, &query_refs)
         .await?;
 
     let repos = result
-        .get("data")
+        .get(wrapper_key)
         .and_then(|v| v.as_array())
         .cloned()
         .unwrap_or_default();
@@ -122,7 +136,7 @@ pub async fn repo_search(
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
             let stars = r
-                .get("stars_count")
+                .get(stars_key)
                 .and_then(|v| v.as_i64())
                 .unwrap_or(0);
             if desc.is_empty() {

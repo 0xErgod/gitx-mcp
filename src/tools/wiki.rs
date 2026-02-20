@@ -2,7 +2,7 @@ use rmcp::model::{CallToolResult, Content};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::client::GiteaClient;
+use crate::client::GitClient;
 use crate::error::Result;
 use crate::repo_resolver::RepoInfo;
 use crate::server::resolve_owner_repo;
@@ -47,25 +47,32 @@ pub struct WikiCreateParams {
     pub content: String,
 }
 
-pub async fn wiki_list(client: &GiteaClient, params: WikiListParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+pub async fn wiki_list(client: &dyn GitClient, params: WikiListParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    if client.platform() == crate::platform::Platform::GitHub {
+        return Ok(CallToolResult::success(vec![Content::text(
+            "Wiki CRUD is not available on GitHub. GitHub does not expose a wiki API.",
+        )]));
+    }
+
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     let mut query: Vec<(&str, String)> = Vec::new();
     query.push(("page", params.page.unwrap_or(1).to_string()));
     query.push(("limit", params.limit.unwrap_or(20).min(50).to_string()));
 
     let query_refs: Vec<(&str, &str)> = query.iter().map(|(k, v)| (*k, v.as_str())).collect();
-    let pages: Vec<serde_json::Value> = match client
-        .get_with_query(&format!("/repos/{owner}/{repo}/wiki/pages"), &query_refs)
+    let val = match client
+        .get_json_with_query(&format!("/repos/{owner}/{repo}/wiki/pages"), &query_refs)
         .await
     {
-        Ok(p) => p,
-        Err(crate::error::GiteaError::NotFound(_)) => {
+        Ok(v) => v,
+        Err(crate::error::GitxError::NotFound(_)) => {
             return Ok(CallToolResult::success(vec![Content::text(
                 "No wiki pages found (wiki may be disabled for this repository).",
             )]));
         }
         Err(e) => return Err(e),
     };
+    let pages = val.as_array().cloned().unwrap_or_default();
 
     if pages.is_empty() {
         return Ok(CallToolResult::success(vec![Content::text(
@@ -87,10 +94,16 @@ pub async fn wiki_list(client: &GiteaClient, params: WikiListParams, default_rep
     )]))
 }
 
-pub async fn wiki_get(client: &GiteaClient, params: WikiGetParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+pub async fn wiki_get(client: &dyn GitClient, params: WikiGetParams, default_repo: Option<&RepoInfo>) -> Result<CallToolResult> {
+    if client.platform() == crate::platform::Platform::GitHub {
+        return Ok(CallToolResult::success(vec![Content::text(
+            "Wiki CRUD is not available on GitHub. GitHub does not expose a wiki API.",
+        )]));
+    }
+
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
-    let page: serde_json::Value = client
-        .get(&format!(
+    let page = client
+        .get_json(&format!(
             "/repos/{owner}/{repo}/wiki/page/{}",
             params.slug
         ))
@@ -123,10 +136,16 @@ pub async fn wiki_get(client: &GiteaClient, params: WikiGetParams, default_repo:
 }
 
 pub async fn wiki_create(
-    client: &GiteaClient,
+    client: &dyn GitClient,
     params: WikiCreateParams,
     default_repo: Option<&RepoInfo>,
 ) -> Result<CallToolResult> {
+    if client.platform() == crate::platform::Platform::GitHub {
+        return Ok(CallToolResult::success(vec![Content::text(
+            "Wiki CRUD is not available on GitHub. GitHub does not expose a wiki API.",
+        )]));
+    }
+
     let (owner, repo) = resolve_owner_repo(&params.owner, &params.repo, &params.directory, default_repo)?;
     use base64::Engine;
     let encoded = base64::engine::general_purpose::STANDARD.encode(params.content.as_bytes());
@@ -135,8 +154,8 @@ pub async fn wiki_create(
         "content_base64": encoded,
     });
 
-    let _page: serde_json::Value = client
-        .post(&format!("/repos/{owner}/{repo}/wiki/new"), &body)
+    let _page = client
+        .post_json(&format!("/repos/{owner}/{repo}/wiki/new"), &body)
         .await?;
 
     Ok(CallToolResult::success(vec![Content::text(format!(
