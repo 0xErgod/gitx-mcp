@@ -133,10 +133,12 @@ impl GitClient for GitHubClient {
     async fn post_no_content(&self, path: &str, body: &Value) -> Result<()> {
         let resp = self.http.put(self.url(path)).json(body).send().await?;
         let status = resp.status();
-        if status == reqwest::StatusCode::UNAUTHORIZED
-            || status == reqwest::StatusCode::FORBIDDEN
-        {
+        if status == reqwest::StatusCode::UNAUTHORIZED {
             return Err(GitxError::Auth);
+        }
+        if status == reqwest::StatusCode::FORBIDDEN {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(GitxError::Api(format!("Forbidden (403): {body}")));
         }
         if status == reqwest::StatusCode::NOT_FOUND {
             return Err(GitxError::NotFound(self.url(path)));
