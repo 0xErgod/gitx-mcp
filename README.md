@@ -104,7 +104,14 @@ Then the MCP config only needs:
 
 ### Repository resolution
 
-Most tools accept `owner` and `repo` parameters to identify the target repository. Alternatively, you can pass a `directory` parameter pointing to a local clone, and gitx-mcp will auto-detect the owner and repo from `.git/config`.
+Most tools accept `owner` and `repo` parameters to identify the target repository. These can be omitted — gitx-mcp resolves the repository in this order:
+
+1. **Explicit `owner` + `repo`** — always takes priority when both are provided
+2. **`directory` parameter** — auto-detects from `.git/config` in the given directory
+3. **Auto-detected default** — at startup, the server reads `.git/config` from the working directory and exposes the result as an MCP resource (`repo://detected`)
+4. **CWD fallback** — parses `.git/config` from the current directory at call time
+
+The `repo://detected` resource returns `{"owner": "...", "repo": "..."}` and is listed in `resources/list` when a repository is detected. MCP clients can read it to confirm which repository the server is operating on.
 
 ## Tools
 

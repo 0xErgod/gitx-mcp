@@ -427,6 +427,62 @@ impl GitxMcp {
     }
 }
 
+// Extracted resource logic — testable without RequestContext.
+impl GitxMcp {
+    fn build_resource_list(&self) -> std::result::Result<ListResourcesResult, ErrorData> {
+        let resources = if let Some(ref info) = self.detected_repo {
+            vec![RawResource {
+                uri: RESOURCE_URI.to_string(),
+                name: "detected-repo".to_string(),
+                title: Some(format!("{}/{}", info.owner, info.repo)),
+                description: Some(
+                    "Auto-detected repository from the server's working directory. \
+                     When present, owner and repo params can be omitted from tool calls."
+                        .to_string(),
+                ),
+                mime_type: Some("application/json".to_string()),
+                size: None,
+                icons: None,
+                meta: None,
+            }
+            .no_annotation()]
+        } else {
+            vec![]
+        };
+
+        Ok(ListResourcesResult {
+            resources,
+            next_cursor: None,
+            meta: None,
+        })
+    }
+
+    fn build_resource_read(&self, uri: &str) -> std::result::Result<ReadResourceResult, ErrorData> {
+        if uri != RESOURCE_URI {
+            return Err(ErrorData::resource_not_found(
+                format!("Unknown resource URI: {uri}"),
+                None,
+            ));
+        }
+
+        let info = self.detected_repo.as_ref().ok_or_else(|| {
+            ErrorData::resource_not_found(
+                "No repository detected in the server's working directory".to_string(),
+                None,
+            )
+        })?;
+
+        let json = serde_json::json!({
+            "owner": info.owner,
+            "repo": info.repo,
+        });
+
+        Ok(ReadResourceResult {
+            contents: vec![ResourceContents::text(json.to_string(), RESOURCE_URI)],
+        })
+    }
+}
+
 #[tool_handler]
 impl ServerHandler for GitxMcp {
     fn get_info(&self) -> ServerInfo {
@@ -462,31 +518,7 @@ impl ServerHandler for GitxMcp {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> std::result::Result<ListResourcesResult, ErrorData> {
-        let resources = if let Some(ref info) = self.detected_repo {
-            vec![RawResource {
-                uri: RESOURCE_URI.to_string(),
-                name: "detected-repo".to_string(),
-                title: Some(format!("{}/{}", info.owner, info.repo)),
-                description: Some(
-                    "Auto-detected repository from the server's working directory. \
-                     When present, owner and repo params can be omitted from tool calls."
-                        .to_string(),
-                ),
-                mime_type: Some("application/json".to_string()),
-                size: None,
-                icons: None,
-                meta: None,
-            }
-            .no_annotation()]
-        } else {
-            vec![]
-        };
-
-        Ok(ListResourcesResult {
-            resources,
-            next_cursor: None,
-            meta: None,
-        })
+        self.build_resource_list()
     }
 
     async fn read_resource(
@@ -494,31 +526,7 @@ impl ServerHandler for GitxMcp {
         request: ReadResourceRequestParams,
         _context: RequestContext<RoleServer>,
     ) -> std::result::Result<ReadResourceResult, ErrorData> {
-        if request.uri != RESOURCE_URI {
-            return Err(ErrorData::resource_not_found(
-                format!("Unknown resource URI: {}", request.uri),
-                None,
-            ));
-        }
-
-        let info = self.detected_repo.as_ref().ok_or_else(|| {
-            ErrorData::resource_not_found(
-                "No repository detected in the server's working directory".to_string(),
-                None,
-            )
-        })?;
-
-        let json = serde_json::json!({
-            "owner": info.owner,
-            "repo": info.repo,
-        });
-
-        Ok(ReadResourceResult {
-            contents: vec![ResourceContents::text(
-                json.to_string(),
-                RESOURCE_URI,
-            )],
-        })
+        self.build_resource_read(&request.uri)
     }
 }
 
@@ -646,11 +654,91 @@ mod tests {
         assert!(result.is_err());
     }
 
+    // ── Helper to build GitxMcp for tests ─────────────────────────
+
+    fn test_server(detected_repo: Option<RepoInfo>) -> GitxMcp {
+        let config = crate::config::Config {
+            base_url: "http://localhost:3000".to_string(),
+            token: "test-token".to_string(),
+        };
+        let client = crate::client::GiteaClient::new(&config).unwrap();
+        GitxMcp {
+            client,
+            tool_router: GitxMcp::tool_router(),
+            detected_repo,
+        }
+    }
+
     // ── Resource logic tests ───────────────────────────────────────
 
     #[test]
     fn resource_uri_constant() {
         assert_eq!(RESOURCE_URI, "repo://detected");
+    }
+
+    #[test]
+    fn list_resources_with_detected_repo() {
+        let server = test_server(Some(RepoInfo {
+            owner: "myorg".to_string(),
+            repo: "myproject".to_string(),
+        }));
+
+        let result = server.build_resource_list().unwrap();
+        assert_eq!(result.resources.len(), 1);
+
+        let res = &result.resources[0];
+        assert_eq!(res.raw.uri, "repo://detected");
+        assert_eq!(res.raw.name, "detected-repo");
+        assert_eq!(res.raw.title.as_deref(), Some("myorg/myproject"));
+        assert_eq!(res.raw.mime_type.as_deref(), Some("application/json"));
+    }
+
+    #[test]
+    fn list_resources_without_detected_repo() {
+        let server = test_server(None);
+
+        let result = server.build_resource_list().unwrap();
+        assert!(result.resources.is_empty());
+    }
+
+    #[test]
+    fn read_resource_returns_owner_repo_json() {
+        let server = test_server(Some(RepoInfo {
+            owner: "testowner".to_string(),
+            repo: "testrepo".to_string(),
+        }));
+
+        let result = server.build_resource_read("repo://detected").unwrap();
+        assert_eq!(result.contents.len(), 1);
+
+        // Parse the text content as JSON
+        let content = &result.contents[0];
+        let text = match content {
+            ResourceContents::TextResourceContents { text, .. } => text,
+            _ => panic!("Expected text resource content"),
+        };
+        let parsed: serde_json::Value = serde_json::from_str(text).unwrap();
+        assert_eq!(parsed["owner"], "testowner");
+        assert_eq!(parsed["repo"], "testrepo");
+    }
+
+    #[test]
+    fn read_resource_unknown_uri_errors() {
+        let server = test_server(Some(RepoInfo {
+            owner: "x".to_string(),
+            repo: "y".to_string(),
+        }));
+
+        let err = server.build_resource_read("repo://unknown").unwrap_err();
+        assert_eq!(err.code, ErrorCode::RESOURCE_NOT_FOUND);
+    }
+
+    #[test]
+    fn read_resource_no_detected_repo_errors() {
+        let server = test_server(None);
+
+        let err = server.build_resource_read("repo://detected").unwrap_err();
+        assert_eq!(err.code, ErrorCode::RESOURCE_NOT_FOUND);
     }
 
     #[test]
